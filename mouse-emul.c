@@ -209,6 +209,10 @@ int main(int argc, char *argv[])
 
 	while (!want_to_exit) {
 		cnt = read(evdev, ev, sizeof(ev));
+		if (cnt == -1) {
+			warn("Read returned error: %s\n", strerror(errno));
+			break;
+		}
 		for (i = 0;
 		     i < cnt / sizeof(struct input_event);
 		     i++) {
