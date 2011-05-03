@@ -8,7 +8,7 @@ MOUSE_EMUL_SRC=mouse-emul.c options.c
 MOUSE_EMUL_OBJ=${MOUSE_EMUL_SRC:.c=.o}
 
 mouse-emul: ${MOUSE_EMUL_OBJ}
-	${CC} -o $@ ${MOUSE_EMUL_OBJ} -lpopt ${LDFLAGS}
+	${CC} -o $@ ${MOUSE_EMUL_OBJ} ${LDFLAGS}
 
 %.o : %.c
 	${CC} ${CFLAGS} -c -o $@ $<
