@@ -38,7 +38,7 @@
 #include "options.h"
 
 #define MAX_ACCEL 24
-#define ACCEL_FACTOR 3
+#define ACCEL_DIVIDOR 3
 
 static int want_to_exit;
 
@@ -113,16 +113,28 @@ void process_event(int ufile, struct input_event evt)
 	}
 
 	if (evt.code == up_code) {
-		moving += evt.value == 0 ? -1 : 1;
+		if (evt.value == 0)
+			moving--;
+		else if (evt.value == 1)
+			moving++;
 		dy = evt.value == 0 ? 0 : -1;
 	} else if (evt.code == down_code) {
-		moving += evt.value == 0 ? -1 : 1;
+		if (evt.value == 0)
+			moving--;
+		else if (evt.value == 1)
+			moving++;
 		dy = evt.value == 0 ? 0 : 1;
 	} else if (evt.code == right_code) {
-		moving += evt.value == 0 ? -1 : 1;
+		if (evt.value == 0)
+			moving--;
+		else if (evt.value == 1)
+			moving++;
 		dx = evt.value == 0 ? 0 : 1;
 	} else if (evt.code == left_code) {
-		moving += evt.value == 0 ? -1 : 1;
+		if (evt.value == 0)
+			moving--;
+		else if (evt.value == 1)
+			moving++;
 		dx = evt.value == 0 ? 0 : -1;
 	} else if (evt.code == lbutton_code) {
 		send_event(ufile, EV_KEY, BTN_LEFT, evt.value);
@@ -145,8 +157,8 @@ void process_event(int ufile, struct input_event evt)
 		if (accel < MAX_ACCEL)
 			accel++;
 
-		send_event(ufile, EV_REL, REL_X, dx * (1 + accel / ACCEL_FACTOR));
-		send_event(ufile, EV_REL, REL_Y, dy * (1 + accel / ACCEL_FACTOR));
+		send_event(ufile, EV_REL, REL_X, dx * (1 + accel / ACCEL_DIVIDOR));
+		send_event(ufile, EV_REL, REL_Y, dy * (1 + accel / ACCEL_DIVIDOR));
 	} else
 		accel = 0;
 
