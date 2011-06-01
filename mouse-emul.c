@@ -184,6 +184,9 @@ int main(int argc, char *argv[])
 
 	ufile = open("/dev/input/uinput", O_WRONLY);
 	if (ufile == -1)
+		ufile = open("/dev/uinput", O_WRONLY);
+
+	if (ufile == -1)
 		die("Could not open uinput: %s\n", strerror(errno));
 
 	evdev = open(dev_name, O_RDONLY);
