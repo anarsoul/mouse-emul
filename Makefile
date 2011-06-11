@@ -16,6 +16,6 @@ mouse-emul: ${MOUSE_EMUL_OBJ}
 clean:
 	${RM} ${MOUSE_EMUL_OBJ} mouse-emul
 
-install: mouse-emu
+install: mouse-emul
 	install -d ${DESTDIR}${BINDIR}
 	install -m755 mouse-emul ${DESTDIR}${BINDIR}/
