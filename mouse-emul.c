@@ -20,6 +20,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -39,6 +40,7 @@
 
 #define MAX_ACCEL 24
 #define ACCEL_DIVIDOR 3
+#define POLL_TIMEOUT_MS 1000
 
 static int want_to_exit;
 
@@ -171,6 +173,7 @@ int main(int argc, char *argv[])
 	int ufile, i, cnt, res;
 	int value;
 	struct input_event ev[64];
+	struct pollfd pollfd;
 
 	struct uinput_user_dev uinp;
 	struct input_event event;
@@ -222,7 +225,14 @@ int main(int argc, char *argv[])
 	if (ioctl(ufile, UI_DEV_CREATE) < 0)
 		die("Error during input device creation: %s\n", strerror(errno));
 
+	pollfd.fd = evdev;
+	pollfd.events = POLLIN;
 	while (!want_to_exit) {
+		res = poll(&pollfd, 1, POLL_TIMEOUT_MS);
+
+		if (!res || res == -1 || pollfd.revents != POLLIN)
+			continue;
+
 		cnt = read(evdev, ev, sizeof(ev));
 		if (cnt == -1) {
 			warn("Read returned error: %s\n", strerror(errno));
