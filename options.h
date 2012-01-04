@@ -27,6 +27,7 @@ extern int left_code, right_code, down_code, up_code;
 extern int toggle_code, mod_code;
 extern int lbutton_code, mbutton_code, rbutton_code;
 extern int codes[KEY_CNT];
+extern int background;
 
 void options_init(int argc, char *argv[]);
 

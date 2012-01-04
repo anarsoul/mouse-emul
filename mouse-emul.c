@@ -200,6 +200,10 @@ int main(int argc, char *argv[])
 	if (res)
 		die("Could not grab %s: %s\n", dev_name, strerror(errno));
 
+	/* Everything is ready, it's time to go into background */
+	if (background)
+		daemon(0, 1);
+
 	memset(&uinp, 0, sizeof(uinp));
 	strncpy(uinp.name, EMU_NAME, sizeof(EMU_NAME));
 	uinp.id.version = 4;
@@ -245,7 +249,7 @@ int main(int argc, char *argv[])
 				process_event(ufile, ev[i]);
 		}
 	}
-	warn("Terminating...\n");
+	warn("%s: terminating...\n", argv[0]);
 	ioctl(ufile, UI_DEV_DESTROY);
 	close(ufile);
 }

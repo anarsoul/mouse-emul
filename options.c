@@ -33,13 +33,15 @@ char dev_name[1024];
 int left_code = KEY_LEFT, right_code = KEY_RIGHT, down_code = KEY_DOWN, up_code = KEY_UP;
 int toggle_code = KEY_OPTION, mod_code = KEY_LEFTALT;
 int lbutton_code = KEY_ENTER, mbutton_code = KEY_PLAYCD, rbutton_code = KEY_STOPCD;
+int background;
 int codes[KEY_CNT];
 
-static const char short_options[] = "d:c:h";
+static const char short_options[] = "d:c:bh";
 
 static const struct option long_options[] = {
 	{"device", required_argument, NULL, 'd'},
 	{"config", required_argument, NULL, 'c'},
+	{"daemon", no_argument, NULL, 'b'},
 	{"help", no_argument, NULL, 'h'},
 	{NULL, 0, 0, 0}
 };
@@ -49,6 +51,7 @@ static void usage(int argc, char *argv[])
 	printf("Usage: %s [options]\n\n"
 	       "-d | --device name	Input device to use as source [/dev/input/event1]\n"
 	       "-c | --config name	Config file [/etc/mouse-emu]\n"
+	       "-b | --daemon		Run daemon in the background\n"
 	       "-h | --help		Print this message\n", argv[0]);
 }
 
@@ -159,6 +162,9 @@ void options_init(int argc, char *argv[])
 			break;
 		case 'c':
 			strncpy(config_name, optarg, sizeof(config_name));
+			break;
+		case 'b':
+			background = 1;
 			break;
 		case 'h':
 			usage(argc, argv);

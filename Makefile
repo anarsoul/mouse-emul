@@ -11,7 +11,7 @@ mouse-emul: ${MOUSE_EMUL_OBJ}
 	${CC} -o $@ ${MOUSE_EMUL_OBJ} ${LDFLAGS}
 
 %.o : %.c
-	${CC} ${CFLAGS} -c -o $@ $<
+	${CC} -D_XOPEN_SOURCE ${CFLAGS} -c -o $@ $<
 
 clean:
 	${RM} ${MOUSE_EMUL_OBJ} mouse-emul
