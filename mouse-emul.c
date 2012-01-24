@@ -95,7 +95,7 @@ int send_event(int ufile, __u16 type, __u16 code, __s32 value)
 	return 0;
 }
 
-void process_event(int ufile, struct input_event evt)
+void process_event(int ufile_kbd, int ufile_mouse, struct input_event evt)
 {
 	static int enabled, tmp_enabled;
 	static int dx, dy;
@@ -109,8 +109,8 @@ void process_event(int ufile, struct input_event evt)
 
 	/* No emulation enabled? Passthrough event */
 	if (!enabled && !tmp_enabled) {
-		send_event(ufile, EV_KEY, evt.code, evt.value);
-		send_event(ufile, EV_SYN, SYN_REPORT, 0);
+		send_event(ufile_kbd, EV_KEY, evt.code, evt.value);
+		send_event(ufile_kbd, EV_SYN, SYN_REPORT, 0);
 		return;
 	}
 
@@ -139,16 +139,22 @@ void process_event(int ufile, struct input_event evt)
 			moving++;
 		dx = evt.value == 0 ? 0 : -1;
 	} else if (evt.code == lbutton_code) {
-		send_event(ufile, EV_KEY, BTN_LEFT, evt.value);
+		send_event(ufile_mouse, EV_KEY, BTN_LEFT, evt.value);
+		send_event(ufile_mouse, EV_SYN, SYN_REPORT, 0);
 	} else if (evt.code == rbutton_code) {
-		send_event(ufile, EV_KEY, BTN_RIGHT, evt.value);
+		send_event(ufile_mouse, EV_KEY, BTN_RIGHT, evt.value);
+		send_event(ufile_mouse, EV_SYN, SYN_REPORT, 0);
 	} else if (evt.code == mbutton_code) {
-		send_event(ufile, EV_KEY, BTN_MIDDLE, evt.value);
+		send_event(ufile_mouse, EV_KEY, BTN_MIDDLE, evt.value);
+		send_event(ufile_mouse, EV_SYN, SYN_REPORT, 0);
 	} else {
-		if (codes[evt.code])
-			send_event(ufile, EV_KEY, codes[evt.code], evt.value);
-		else
-			send_event(ufile, EV_KEY, evt.code, evt.value);
+		if (codes[evt.code]) {
+			send_event(ufile_kbd, EV_KEY, codes[evt.code], evt.value);
+			send_event(ufile_kbd, EV_SYN, SYN_REPORT, 0);
+		} else {
+			send_event(ufile_kbd, EV_KEY, evt.code, evt.value);
+			send_event(ufile_kbd, EV_SYN, SYN_REPORT, 0);
+		}
 	}
 
 	/* Clamp value */
@@ -159,18 +165,17 @@ void process_event(int ufile, struct input_event evt)
 		if (accel < MAX_ACCEL)
 			accel++;
 
-		send_event(ufile, EV_REL, REL_X, dx * (1 + accel / ACCEL_DIVIDOR));
-		send_event(ufile, EV_REL, REL_Y, dy * (1 + accel / ACCEL_DIVIDOR));
+		send_event(ufile_mouse, EV_REL, REL_X, dx * (1 + accel / ACCEL_DIVIDOR));
+		send_event(ufile_mouse, EV_REL, REL_Y, dy * (1 + accel / ACCEL_DIVIDOR));
+		send_event(ufile_mouse, EV_SYN, SYN_REPORT, 0);
 	} else
 		accel = 0;
-
-	send_event(ufile, EV_SYN, SYN_REPORT, 0);
 }
 
 int main(int argc, char *argv[])
 {
 	int evdev;
-	int ufile, i, cnt, res;
+	int ufile_kbd, ufile_mouse, i, cnt, res;
 	int value;
 	struct input_event ev[64];
 	struct pollfd pollfd;
@@ -185,18 +190,25 @@ int main(int argc, char *argv[])
 
 	options_init(argc, argv);
 
-	ufile = open("/dev/input/uinput", O_WRONLY);
-	if (ufile == -1)
-		ufile = open("/dev/uinput", O_WRONLY);
+	ufile_kbd = open("/dev/input/uinput", O_WRONLY);
+	if (ufile_kbd == -1)
+		ufile_kbd = open("/dev/uinput", O_WRONLY);
 
-	if (ufile == -1)
+	if (ufile_kbd == -1)
+		die("Could not open uinput: %s\n", strerror(errno));
+
+	ufile_mouse = open("/dev/input/uinput", O_WRONLY);
+	if (ufile_mouse == -1)
+		ufile_mouse = open("/dev/uinput", O_WRONLY);
+
+	if (ufile_mouse == -1)
 		die("Could not open uinput: %s\n", strerror(errno));
 
 	evdev = open(dev_name, O_RDONLY);
 	if (evdev == -1)
 		die("Could not open %s: %s\n", dev_name, strerror(errno));
 
-	res = ioctl(evdev, EVIOCGRAB, &value);
+	res = ioctl(evdev, EVIOCGRAB, 1);
 	if (res)
 		die("Could not grab %s: %s\n", dev_name, strerror(errno));
 
@@ -204,30 +216,43 @@ int main(int argc, char *argv[])
 	if (background)
 		daemon(0, 1);
 
+	/* Only keys for kbd device */ 
+	ioctl(ufile_kbd, UI_SET_EVBIT, EV_KEY);
+	ioctl(ufile_kbd, UI_SET_EVBIT, EV_REL);
+	for (i = 0; i < KEY_MAX; i++)
+		ioctl(ufile_kbd, UI_SET_KEYBIT, i);
+
+	/* Mouse events for mouse device */
+	ioctl(ufile_mouse, UI_SET_EVBIT, EV_KEY);
+	ioctl(ufile_mouse, UI_SET_EVBIT, EV_REL);
+	ioctl(ufile_mouse, UI_SET_RELBIT, REL_X);
+	ioctl(ufile_mouse, UI_SET_RELBIT, REL_Y);
+	ioctl(ufile_mouse, UI_SET_KEYBIT, BTN_MOUSE);
+	ioctl(ufile_mouse, UI_SET_KEYBIT, BTN_LEFT);
+	ioctl(ufile_mouse, UI_SET_KEYBIT, BTN_RIGHT);
+	ioctl(ufile_mouse, UI_SET_KEYBIT, BTN_MIDDLE);
+
 	memset(&uinp, 0, sizeof(uinp));
-	strncpy(uinp.name, EMU_NAME, sizeof(EMU_NAME));
 	uinp.id.version = 4;
 	uinp.id.bustype = BUS_USB;
+	strncpy(uinp.name, EMU_NAME_KBD, sizeof(EMU_NAME_KBD));
+	res = write(ufile_kbd, &uinp, sizeof(uinp));
+	if (res == -1)
+		die("Error during writing to ufile_kbd: %s\n", strerror(errno));
 
-	/* We can emit key and move relative events */
-	ioctl(ufile, UI_SET_EVBIT, EV_KEY);
-	ioctl(ufile, UI_SET_EVBIT, EV_REL);
-	ioctl(ufile, UI_SET_RELBIT, REL_X);
-	ioctl(ufile, UI_SET_RELBIT, REL_Y);
+	memset(&uinp, 0, sizeof(uinp));
+	uinp.id.version = 4;
+	uinp.id.bustype = BUS_USB;
+	strncpy(uinp.name, EMU_NAME_MOUSE, sizeof(EMU_NAME_MOUSE));
+	res = write(ufile_mouse, &uinp, sizeof(uinp));
+	if (res == -1)
+		die("Error during writing to ufile_mouse: %s\n", strerror(errno));
 
-	/* Any key, any button */
-	for (i = 0; i < KEY_MAX; i++)
-		ioctl(ufile, UI_SET_KEYBIT, i);
+	if (ioctl(ufile_kbd, UI_DEV_CREATE) < 0)
+		die("Error during kbd input device creation: %s\n", strerror(errno));
 
-	ioctl(ufile, UI_SET_KEYBIT, BTN_MOUSE);
-	ioctl(ufile, UI_SET_KEYBIT, BTN_LEFT);
-	ioctl(ufile, UI_SET_KEYBIT, BTN_RIGHT);
-	ioctl(ufile, UI_SET_KEYBIT, BTN_MIDDLE);
-
-	res = write(ufile, &uinp, sizeof(uinp));
-
-	if (ioctl(ufile, UI_DEV_CREATE) < 0)
-		die("Error during input device creation: %s\n", strerror(errno));
+	if (ioctl(ufile_mouse, UI_DEV_CREATE) < 0)
+		die("Error during mouse input device creation: %s\n", strerror(errno));
 
 	pollfd.fd = evdev;
 	pollfd.events = POLLIN;
@@ -246,10 +271,17 @@ int main(int argc, char *argv[])
 		     i < cnt / sizeof(struct input_event);
 		     i++) {
 			if (EV_KEY == ev[i].type)
-				process_event(ufile, ev[i]);
+				process_event(ufile_kbd, ufile_mouse, ev[i]);
 		}
 	}
 	warn("%s: terminating...\n", argv[0]);
-	ioctl(ufile, UI_DEV_DESTROY);
-	close(ufile);
+	ioctl(ufile_kbd, UI_DEV_DESTROY);
+	ioctl(ufile_mouse, UI_DEV_DESTROY);
+	close(ufile_kbd);
+	close(ufile_mouse);
+
+	res = ioctl(evdev, EVIOCGRAB, 0);
+	if (res)
+		warn("Could not ungrab %s: %s\n", dev_name, strerror(errno));
+	close(evdev);
 }

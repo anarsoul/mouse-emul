@@ -21,7 +21,8 @@
 #ifndef __MOUSE_EMUL_H
 #define __MOUSE_EMUL_H
 
-#define EMU_NAME "mouse-emul"
+#define EMU_NAME_KBD "mouse-emul-kdb"
+#define EMU_NAME_MOUSE "mouse-emul-mouse"
 
 void die(const char *errstr, ...);
 void warn(const char *errstr, ...);
