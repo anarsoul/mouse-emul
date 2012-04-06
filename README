@@ -20,7 +20,7 @@ Where <left-value> can be 'left', 'right', 'up', 'down', 'lbutton', 'rbutton',
 'mbutton', 'toggle', 'mod' (all without quotes). These are name of keys used to
 emulate mouse, last two are 'switches' to mouse-mode, last one is for temporary
 switching (i.e. press mod+left to move mouse cursor to left). Also <left-value> can be
-a decimal number - key code to translate into <right-value> keycode (Usefull if you want
-translate some key to another in mouse-mode). <right-value> is keycode in decimal form.
+a key name to translate into <right-value> key name (Usefull if you want
+translate some key to another in mouse-mode). <right-value> is key name.
 
-Look for keycodes in /usr/include/linux/input.h
+Invoke mouse-emul -l for list of supported keycodes.

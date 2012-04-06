@@ -1,2 +1,4 @@
-toggle=148
-mod=100
+toggle=KEY_NUMLOCK
+mod=KEY_RIGHTALT
+KEY_1=KEY_2
+KEY_2=KEY_1

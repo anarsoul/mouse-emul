@@ -1,6 +1,6 @@
 /*  
  *  mouse-emul - Tiny mouse emulator
- *  Copyright (C) 2011 Vasily Khoruzhick (anarsoul@gmail.com)
+ *  Copyright (C) 2011-2012 Vasily Khoruzhick (anarsoul@gmail.com)
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -26,22 +26,46 @@
 #include <string.h>
 #include <linux/input.h>
 
+#include "options.h"
+#include "input_map.h"
 #include "mouse-emul.h"
+
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) (sizeof((a)) / sizeof(*(a)))
+#endif
 
 char dev_name[1024];
 
-int left_code = KEY_LEFT, right_code = KEY_RIGHT, down_code = KEY_DOWN, up_code = KEY_UP;
-int toggle_code = KEY_OPTION, mod_code = KEY_LEFTALT;
-int lbutton_code = KEY_ENTER, mbutton_code = KEY_PLAYCD, rbutton_code = KEY_STOPCD;
+uint32_t left_code = KEY_LEFT, right_code = KEY_RIGHT, down_code = KEY_DOWN, up_code = KEY_UP;
+uint32_t toggle_code = KEY_OPTION, mod_code = KEY_LEFTALT;
+uint32_t lbutton_code = KEY_ENTER, mbutton_code = KEY_PLAYCD, rbutton_code = KEY_STOPCD;
 int background;
-int codes[KEY_CNT];
 
-static const char short_options[] = "d:c:bh";
+uint32_t codes[EVENT_TYPES][KEY_CNT];
+
+uint16_t type_linux_to_local[EV_CNT] = {
+	[EV_KEY] = EVENT_KEY,
+	[EV_SW] = EVENT_SW,
+};
+
+uint16_t type_local_to_linux[EVENT_TYPES] = {
+	[EVENT_KEY] = EV_KEY,
+	[EVENT_SW] = EV_SW,
+};
+
+struct uint_str_tuple types_str[] = {
+	{ .str = "KEY_", .uint = EVENT_KEY },
+	{ .str = "SW_", .uint = EVENT_SW },
+	{ .str = "BTN_", .uint = EVENT_KEY },
+};
+
+static const char short_options[] = "d:c:blh";
 
 static const struct option long_options[] = {
 	{"device", required_argument, NULL, 'd'},
 	{"config", required_argument, NULL, 'c'},
 	{"daemon", no_argument, NULL, 'b'},
+	{"list", no_argument, NULL, 'l'},
 	{"help", no_argument, NULL, 'h'},
 	{NULL, 0, 0, 0}
 };
@@ -52,18 +76,49 @@ static void usage(int argc, char *argv[])
 	       "-d | --device name	Input device to use as source [/dev/input/event1]\n"
 	       "-c | --config name	Config file [/etc/mouse-emu]\n"
 	       "-b | --daemon		Run daemon in the background\n"
+	       "-l | --list		List supported key codes\n"
 	       "-h | --help		Print this message\n", argv[0]);
 }
 
+static void list_keycodes(void)
+{
+	int i;
+	for (i = 0; i < ARRAY_SIZE(linux_input_map); i++) {
+		printf("%s\n", linux_input_map[i].str);
+	}
+}
+
+/* XXX: This is definitely not an optimal solution
+ * but it works only once at startup
+ * so who cares?
+ */
+uint32_t get_code_for_str(const char *str)
+{
+	int i;
+	uint32_t val;
+
+	for (i = 0; i < ARRAY_SIZE(linux_input_map); i++) {
+		if (strcmp(linux_input_map[i].str, str) == 0)
+			break;
+	}
+	if (i == ARRAY_SIZE(linux_input_map))
+		return 0;
+
+	val = linux_input_map[i].uint;
+
+	for (i = 0; i < ARRAY_SIZE(types_str); i++) {
+		if (strcmp(str, types_str[i].str) == 0) {
+			val |= (types_str[i].uint << TYPE_SHIFT);
+		}
+	}
+
+	return val;
+}
+
 #define EXTRACT_RVALUE \
-	errno = 0; \
-	code2 = strtol(ptr + 1, NULL, 10); \
-	if (errno) {\
-		warn("Syntax error at %d\n", lineno); \
-		continue; \
-	} \
-	if (code2 < 0 || code2 > KEY_MAX) { \
-		warn("Code is out of range at line %d\n", lineno); \
+	code2 = get_code_for_str(ptr + 1); \
+	if (code2 == 0) {\
+		warn("Unknown code %s at %d\n", ptr + 1, lineno); \
 		continue; \
 	}
 
@@ -71,7 +126,7 @@ static void parse_config(const char *filename)
 {
 	FILE *in;
 	char line[1024], *ptr;
-	long int code, code2;
+	uint32_t code, code2;
 	int lineno = 0;
 
 	in = fopen(filename, "r");
@@ -83,6 +138,9 @@ static void parse_config(const char *filename)
 	while (fgets(line, sizeof(line), in)) {
 		lineno++;
 
+		while (ptr = strchr(line, '\n')) {
+			*ptr = '\0';
+		}
 		ptr = strchr(line, '=');
 		if (ptr) {
 			*ptr = '\0';
@@ -98,6 +156,12 @@ static void parse_config(const char *filename)
 			} else if (strcmp(line, "down") == 0) {
 				EXTRACT_RVALUE;
 				down_code = code2;
+			} else if (strcmp(line, "toggle") == 0) {
+				EXTRACT_RVALUE;
+				toggle_code = code2;
+			} else if (strcmp(line, "mod") == 0) {
+				EXTRACT_RVALUE;
+				mod_code = code2;
 			} else if (strcmp(line, "lbutton") == 0) {
 				EXTRACT_RVALUE;
 				lbutton_code = code2;
@@ -107,26 +171,15 @@ static void parse_config(const char *filename)
 			} else if (strcmp(line, "mbutton") == 0) {
 				EXTRACT_RVALUE;
 				mbutton_code = code2;
-			} else if (strcmp(line, "toggle") == 0) {
-				EXTRACT_RVALUE;
-				toggle_code = code2;
-			} else if (strcmp(line, "mod") == 0) {
-				EXTRACT_RVALUE;
-				mod_code = code2;
 			} else {
-				errno = 0;
-				code = strtol(line, NULL, 10);
-				if (errno) {
-					warn("Syntax error at line %d\n", lineno);
-					continue;
+				code = get_code_for_str(line);
+				if (code != 0) {
+					EXTRACT_RVALUE;
+					printf("mapping code %x to code %x\n", code, code2);
+					codes[(code & TYPE_MASK) >> TYPE_SHIFT][code & CODE_MASK] = code2;
+				} else {
+					warn("Uknown code %s at line %d\n", line, lineno);
 				}
-				if (code < 0 || code > KEY_MAX) {
-					warn("Code is out of range at line %d\n", lineno);
-					continue;
-				}
-
-				EXTRACT_RVALUE;
-				codes[code] = code2;
 			}
 		} else {
 			warn("Syntax error at line %d\n", lineno);
@@ -139,9 +192,11 @@ static void parse_config(const char *filename)
 
 void options_init(int argc, char *argv[])
 {
+	int i;
 	char config_name[1024];
 
-	memset(codes, 0, sizeof(codes));
+	for (i = 0; i < EVENT_TYPES; i++)
+		memset(codes[i], 0, sizeof(codes[i]));
 	strcpy(dev_name, "/dev/input/event1");
 	strcpy(config_name, "/etc/mouse-emulrc");
 
@@ -166,6 +221,9 @@ void options_init(int argc, char *argv[])
 		case 'b':
 			background = 1;
 			break;
+		case 'l':
+			list_keycodes();
+			exit(EXIT_SUCCESS);
 		case 'h':
 			usage(argc, argv);
 			exit(EXIT_SUCCESS);

@@ -95,64 +95,70 @@ int send_event(int ufile, __u16 type, __u16 code, __s32 value)
 	return 0;
 }
 
-void process_event(int ufile_kbd, int ufile_mouse, struct input_event evt)
+void process_event(int ufile_kbd, int ufile_mouse, struct input_event *evt)
 {
 	static int enabled, tmp_enabled;
 	static int dx, dy;
 	static int moving, accel;
+	uint32_t code;
 
-	if ((evt.code == toggle_code) && (evt.value == 1))
-		enabled ^= evt.value;
+	/* We're grabbing toggle key, no need to emit event for it */
+	if ((evt->code == (toggle_code & CODE_MASK)) && (evt->value == 1)) {
+		enabled ^= evt->value;
+		return;
+	}
 
-	if (evt.code == mod_code)
-		tmp_enabled = (evt.value == 1);
+	if (evt->code == (mod_code & CODE_MASK))
+		tmp_enabled = (evt->value == 1);
 
 	/* No emulation enabled? Passthrough event */
 	if (!enabled && !tmp_enabled) {
-		send_event(ufile_kbd, EV_KEY, evt.code, evt.value);
+		send_event(ufile_kbd, EV_KEY, evt->code, evt->value);
 		send_event(ufile_kbd, EV_SYN, SYN_REPORT, 0);
 		return;
 	}
 
-	if (evt.code == up_code) {
-		if (evt.value == 0)
+	if (evt->code == up_code) {
+		if (evt->value == 0)
 			moving--;
-		else if (evt.value == 1)
+		else if (evt->value == 1)
 			moving++;
-		dy = evt.value == 0 ? 0 : -1;
-	} else if (evt.code == down_code) {
-		if (evt.value == 0)
+		dy = evt->value == 0 ? 0 : -1;
+	} else if (evt->code == down_code) {
+		if (evt->value == 0)
 			moving--;
-		else if (evt.value == 1)
+		else if (evt->value == 1)
 			moving++;
-		dy = evt.value == 0 ? 0 : 1;
-	} else if (evt.code == right_code) {
-		if (evt.value == 0)
+		dy = evt->value == 0 ? 0 : 1;
+	} else if (evt->code == right_code) {
+		if (evt->value == 0)
 			moving--;
-		else if (evt.value == 1)
+		else if (evt->value == 1)
 			moving++;
-		dx = evt.value == 0 ? 0 : 1;
-	} else if (evt.code == left_code) {
-		if (evt.value == 0)
+		dx = evt->value == 0 ? 0 : 1;
+	} else if (evt->code == left_code) {
+		if (evt->value == 0)
 			moving--;
-		else if (evt.value == 1)
+		else if (evt->value == 1)
 			moving++;
-		dx = evt.value == 0 ? 0 : -1;
-	} else if (evt.code == lbutton_code) {
-		send_event(ufile_mouse, EV_KEY, BTN_LEFT, evt.value);
+		dx = evt->value == 0 ? 0 : -1;
+	} else if (evt->code == lbutton_code) {
+		send_event(ufile_mouse, EV_KEY, BTN_LEFT, evt->value);
 		send_event(ufile_mouse, EV_SYN, SYN_REPORT, 0);
-	} else if (evt.code == rbutton_code) {
-		send_event(ufile_mouse, EV_KEY, BTN_RIGHT, evt.value);
+	} else if (evt->code == rbutton_code) {
+		send_event(ufile_mouse, EV_KEY, BTN_RIGHT, evt->value);
 		send_event(ufile_mouse, EV_SYN, SYN_REPORT, 0);
-	} else if (evt.code == mbutton_code) {
-		send_event(ufile_mouse, EV_KEY, BTN_MIDDLE, evt.value);
+	} else if (evt->code == mbutton_code) {
+		send_event(ufile_mouse, EV_KEY, BTN_MIDDLE, evt->value);
 		send_event(ufile_mouse, EV_SYN, SYN_REPORT, 0);
 	} else {
-		if (codes[evt.code]) {
-			send_event(ufile_kbd, EV_KEY, codes[evt.code], evt.value);
+		if (code = codes[type_linux_to_local[evt->type]][evt->code]) {
+			send_event(ufile_kbd,
+				type_local_to_linux[(code & TYPE_MASK) >> TYPE_SHIFT],
+				code & CODE_MASK, evt->value);
 			send_event(ufile_kbd, EV_SYN, SYN_REPORT, 0);
 		} else {
-			send_event(ufile_kbd, EV_KEY, evt.code, evt.value);
+			send_event(ufile_kbd, EV_KEY, evt->code, evt->value);
 			send_event(ufile_kbd, EV_SYN, SYN_REPORT, 0);
 		}
 	}
@@ -270,8 +276,9 @@ int main(int argc, char *argv[])
 		for (i = 0;
 		     i < cnt / sizeof(struct input_event);
 		     i++) {
-			if (EV_KEY == ev[i].type)
-				process_event(ufile_kbd, ufile_mouse, ev[i]);
+			/* FIXME: ugly hardcode */
+			if (EV_KEY == ev[i].type || EV_SW == ev[i].type)
+				process_event(ufile_kbd, ufile_mouse, &ev[i]);
 		}
 	}
 	warn("%s: terminating...\n", argv[0]);
