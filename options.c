@@ -140,7 +140,7 @@ static void parse_config(const char *filename)
 	while (fgets(line, sizeof(line), in)) {
 		lineno++;
 
-		while (ptr = strchr(line, '\n')) {
+		while ((ptr = strchr(line, '\n')) != NULL) {
 			*ptr = '\0';
 		}
 		ptr = strchr(line, '=');

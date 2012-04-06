@@ -154,7 +154,7 @@ void process_event(int ufile_kbd, int ufile_mouse, struct input_event *evt)
 		send_event(ufile_mouse, EV_KEY, BTN_MIDDLE, evt->value);
 		send_event(ufile_mouse, EV_SYN, SYN_REPORT, 0);
 	} else {
-		if (code = codes[type_linux_to_local[evt->type]][evt->code]) {
+		if ((code = codes[type_linux_to_local[evt->type]][evt->code]) != 0) {
 			send_event(ufile_kbd,
 				type_local_to_linux[(code & TYPE_MASK) >> TYPE_SHIFT],
 				code & CODE_MASK, evt->value);
@@ -185,12 +185,10 @@ int main(int argc, char *argv[])
 	int evdev[MAX_DEVS];
 	int evdev_cnt = 0;
 	int ufile_kbd, ufile_mouse, i, cnt, res;
-	int value;
 	struct input_event ev[64];
 	char *ptr, *next_ptr;
 
 	struct uinput_user_dev uinp;
-	struct input_event event;
 
 	signal(SIGTERM, sighandler);
 	signal(SIGINT, sighandler);
