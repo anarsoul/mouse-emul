@@ -1,4 +1,4 @@
-mouse-emu is a tiny mouse emulator for mouse/touchpad-less devices.
+mouse-emul is a tiny mouse emulator for mouse/touchpad-less devices.
 
 It requires uinput support in kernel (CONFIG_INPUT_UINPUT).
 
@@ -6,10 +6,10 @@ To compile and install it invoke:
 	make all install
 
 To start it invoke:
-	mouse-emul [-d /dev/input/eventX]
-Where /dev/input/eventX is device to use for input
+	mouse-emul [-d /dev/input/eventX,/dev/input/eventY,/dev/input/eventZ]
+Where /dev/input/event{X-Z} is a device to use for input
 
-Add -h argument to get list of arguments.
+Add -h argument to get the list of arguments.
 
 Format of config file.
 
