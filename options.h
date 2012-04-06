@@ -23,7 +23,7 @@
 
 #include <stdint.h>
 
-extern char dev_name[1024];
+extern char dev_name[4096];
 
 extern uint32_t left_code, right_code, down_code, up_code;
 extern uint32_t toggle_code, mod_code;

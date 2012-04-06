@@ -41,6 +41,8 @@
 #define MAX_ACCEL 24
 #define ACCEL_DIVIDOR 3
 #define POLL_TIMEOUT_MS 1000
+/* Max input devs */
+#define MAX_DEVS 64
 
 static int want_to_exit;
 
@@ -180,11 +182,12 @@ void process_event(int ufile_kbd, int ufile_mouse, struct input_event *evt)
 
 int main(int argc, char *argv[])
 {
-	int evdev;
+	int evdev[MAX_DEVS];
+	int evdev_cnt = 0;
 	int ufile_kbd, ufile_mouse, i, cnt, res;
 	int value;
 	struct input_event ev[64];
-	struct pollfd pollfd;
+	char *ptr, *next_ptr;
 
 	struct uinput_user_dev uinp;
 	struct input_event event;
@@ -210,13 +213,28 @@ int main(int argc, char *argv[])
 	if (ufile_mouse == -1)
 		die("Could not open uinput: %s\n", strerror(errno));
 
-	evdev = open(dev_name, O_RDONLY);
-	if (evdev == -1)
-		die("Could not open %s: %s\n", dev_name, strerror(errno));
-
-	res = ioctl(evdev, EVIOCGRAB, 1);
-	if (res)
-		die("Could not grab %s: %s\n", dev_name, strerror(errno));
+	next_ptr = dev_name;
+	while (next_ptr) {
+		ptr = next_ptr;
+		next_ptr = strchr(dev_name, ',');
+		if (next_ptr) {
+			*next_ptr = '\0';
+			next_ptr++;
+			if (*next_ptr == '\0')
+				next_ptr = NULL;
+		}
+		evdev[evdev_cnt] = open(ptr, O_RDONLY);
+		if (evdev[evdev_cnt] == -1) {
+			warn("Could not open %s: %s\n", dev_name, strerror(errno));
+			continue;
+		}
+		res = ioctl(evdev[evdev_cnt], EVIOCGRAB, 1);
+		if (res)
+			die("Could not grab %s: %s\n", ptr, strerror(errno));
+		evdev_cnt++;
+	}
+	if (!evdev_cnt)
+		die("No input devices to listen!\n");
 
 	/* Everything is ready, it's time to go into background */
 	if (background)
@@ -260,25 +278,32 @@ int main(int argc, char *argv[])
 	if (ioctl(ufile_mouse, UI_DEV_CREATE) < 0)
 		die("Error during mouse input device creation: %s\n", strerror(errno));
 
-	pollfd.fd = evdev;
-	pollfd.events = POLLIN;
+	struct pollfd pollfd[evdev_cnt];
+	for (i = 0; i < evdev_cnt; i++) {
+		pollfd[i].fd = evdev[i];
+		pollfd[i].events = POLLIN;
+	}
 	while (!want_to_exit) {
-		res = poll(&pollfd, 1, POLL_TIMEOUT_MS);
+		res = poll(pollfd, evdev_cnt, POLL_TIMEOUT_MS);
 
-		if (!res || res == -1 || pollfd.revents != POLLIN)
+		if (!res || res == -1)
 			continue;
 
-		cnt = read(evdev, ev, sizeof(ev));
-		if (cnt == -1) {
-			warn("Read returned error: %s\n", strerror(errno));
-			break;
-		}
-		for (i = 0;
-		     i < cnt / sizeof(struct input_event);
-		     i++) {
-			/* FIXME: ugly hardcode */
-			if (EV_KEY == ev[i].type || EV_SW == ev[i].type)
-				process_event(ufile_kbd, ufile_mouse, &ev[i]);
+		for (i = 0; i < evdev_cnt; i++) {
+			if (pollfd[i].revents != POLLIN)
+				continue;
+			cnt = read(evdev[i], ev, sizeof(ev));
+			if (cnt == -1) {
+				warn("Read returned error: %s\n", strerror(errno));
+				break;
+			}
+			for (i = 0;
+			     i < cnt / sizeof(struct input_event);
+			     i++) {
+				/* FIXME: ugly hardcode */
+				if (EV_KEY == ev[i].type || EV_SW == ev[i].type)
+					process_event(ufile_kbd, ufile_mouse, &ev[i]);
+			}
 		}
 	}
 	warn("%s: terminating...\n", argv[0]);
@@ -287,8 +312,10 @@ int main(int argc, char *argv[])
 	close(ufile_kbd);
 	close(ufile_mouse);
 
-	res = ioctl(evdev, EVIOCGRAB, 0);
-	if (res)
-		warn("Could not ungrab %s: %s\n", dev_name, strerror(errno));
-	close(evdev);
+	for (i = 0; i < evdev_cnt; i++) {
+		res = ioctl(evdev[i], EVIOCGRAB, 0);
+		if (res)
+			warn("Could not ungrab %d device: %s\n", i, strerror(errno));
+		close(evdev[i]);
+	}
 }

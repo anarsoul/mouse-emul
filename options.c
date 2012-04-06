@@ -34,7 +34,7 @@
 #define ARRAY_SIZE(a) (sizeof((a)) / sizeof(*(a)))
 #endif
 
-char dev_name[1024];
+char dev_name[4096];
 
 uint32_t left_code = KEY_LEFT, right_code = KEY_RIGHT, down_code = KEY_DOWN, up_code = KEY_UP;
 uint32_t toggle_code = KEY_OPTION, mod_code = KEY_LEFTALT;
@@ -74,6 +74,8 @@ static void usage(int argc, char *argv[])
 {
 	printf("Usage: %s [options]\n\n"
 	       "-d | --device name	Input device to use as source [/dev/input/event1]\n"
+	       "                	  Use comma to separate multiple devices, i.e.\n"
+	       "                	  /dev/input/event0,/dev/input/event1\n"
 	       "-c | --config name	Config file [/etc/mouse-emu]\n"
 	       "-b | --daemon		Run daemon in the background\n"
 	       "-l | --list		List supported key codes\n"
